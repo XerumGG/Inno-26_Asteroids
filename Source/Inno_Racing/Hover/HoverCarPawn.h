@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Inno_Racing/Data/HoverCarData.h"
+#include "Inno_Racing/Race/InnoRaceTypes.h"
 #include "HoverCarPawn.generated.h"
 
 class UBoxComponent;
@@ -20,7 +21,7 @@ class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
 
-// Movement sample sent by client to host
+// Movement sample sent by client to host and replicated to remote proxies
 USTRUCT(BlueprintType)
 struct FInnoMovementSample
 {
@@ -37,6 +38,15 @@ struct FInnoMovementSample
 
 	UPROPERTY()
 	FVector Velocity = FVector::ZeroVector;
+
+	UPROPERTY()
+	float SteerInput = 0.0f;
+
+	UPROPERTY()
+	float AccelInput = 0.0f;
+
+	UPROPERTY()
+	float BrakeInput = 0.0f;
 
 	UPROPERTY()
 	uint8 ClutchLevel = 1;
@@ -66,6 +76,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void PawnClientRestart() override;
+	virtual void PossessedBy(AController* NewController) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// --- Root Physics Collision (Level) & Child Visual Mesh (Tilted) ---
@@ -148,7 +159,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HoverCar|Match")
 	void OnRaceStarted();
 
-	// Teleports and resets speed to last checkpoint
+	// Updates the respawn checkpoint transform when passing a track gate
+	UFUNCTION(BlueprintCallable, Category = "HoverCar|Match")
+	void SetCheckpointTransform(const FTransform& NewCheckpointTransform);
+
+	// Teleports and resets speed to a checkpoint transform
 	UFUNCTION(BlueprintCallable, Category = "HoverCar|Match")
 	void RespawnAtCheckpoint(const FTransform& CheckpointTransform);
 
@@ -161,18 +176,24 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "HoverCar|Telemetry")
 	FOnHoverSpeedChangedSignature OnSpeedChanged;
 
-	// --- Replicated Engine Display State (1 byte clutch + flags) ---
+	// --- Replicated Engine Display & Network State ---
 	UPROPERTY(ReplicatedUsing = OnRep_VisualEngineState, VisibleAnywhere, BlueprintReadOnly, Category = "HoverCar|Net")
 	uint8 ReplicatedClutchLevel = 1;
 
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "HoverCar|Net")
+	UPROPERTY(ReplicatedUsing = OnRep_VisualEngineState, VisibleAnywhere, BlueprintReadOnly, Category = "HoverCar|Net")
 	bool bReplicatedBoosting = false;
 
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "HoverCar|Net")
+	UPROPERTY(ReplicatedUsing = OnRep_VisualEngineState, VisibleAnywhere, BlueprintReadOnly, Category = "HoverCar|Net")
 	bool bReplicatedLimpMode = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_ReplicatedMovementSample)
+	FInnoMovementSample ReplicatedSample;
 
 	UFUNCTION()
 	void OnRep_VisualEngineState();
+
+	UFUNCTION()
+	void OnRep_ReplicatedMovementSample();
 
 protected:
 	virtual void BeginPlay() override;
@@ -181,8 +202,17 @@ protected:
 	UFUNCTION(Server, Unreliable)
 	void Server_SendMovementSample(const FInnoMovementSample& Sample);
 
-	// Core simulation loop
+	// Core simulation loop for locally controlled pawn
 	void SimulateHoverMovement(float DeltaTime);
+
+	// Smooth network interpolation for non-locally controlled remote pawns
+	void InterpolateRemoteMovement(float DeltaTime);
+
+	// Syncs physics simulation mode depending on whether this pawn is locally controlled
+	void UpdatePhysicsRoleState();
+
+	// Checks GameState match phase so car hovers during Countdown and unlocks driving on Racing
+	bool CanDriveInCurrentPhase() const;
 
 	// Component Callbacks
 	UFUNCTION()
@@ -190,6 +220,9 @@ protected:
 
 	UFUNCTION()
 	void HandleOffTrack();
+
+	UFUNCTION()
+	void HandleMatchPhaseChanged(EMatchPhase NewPhase);
 
 	// Enhanced Input Callback Handlers
 	void HandleEnhancedAccelerate(const FInputActionValue& Value);
@@ -207,7 +240,15 @@ protected:
 	// Dynamic Physics State
 	float CurrentForwardSpeedMs = 0.0f;
 	float SmoothedTurnRateDegs = 0.0f;
+	FVector TrackedVerticalVelocity = FVector::ZeroVector;
+
+	// Checkpoint & Safe Ground Recovery State
+	FTransform LastCheckpointTransform;
+	FTransform LastSafeGroundedTransform;
+	bool bHasExplicitCheckpoint = false;
+	float SafeGroundRecordTimer = 0.0f;
 
 	TArray<USceneComponent*> HoverNozzles;
 	float NetSampleAccumulator = 0.0f;
+	double LastAcceptedClientTimestamp = -1.0;
 };

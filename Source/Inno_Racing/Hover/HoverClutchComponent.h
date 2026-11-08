@@ -39,6 +39,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Hover|Clutch")
 	void SetLimpMode(bool bInLimpMode);
 
+	// Forces a specific clutch level (e.g. for remote proxy sync)
+	void SetClutchLevelDirect(int32 NewLevel);
+
 	// Current active clutch level (1 to 5)
 	UFUNCTION(BlueprintPure, Category = "Hover|Clutch")
 	int32 GetCurrentClutchLevel() const { return CurrentClutchLevel; }

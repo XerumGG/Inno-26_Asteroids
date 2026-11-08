@@ -6,7 +6,9 @@
 #include "Inno_Racing/Race/InnoRaceGameState.h"
 #include "Inno_Racing/Race/InnoScoring.h"
 #include "Inno_Racing/Hover/HoverCarPawn.h"
+#include "Inno_Racing/Store/InnoLocalStore.h"
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
 
 AInnoRaceGameMode::AInnoRaceGameMode()
 {
@@ -32,12 +34,26 @@ AInnoRaceGameMode::AInnoRaceGameMode()
 void AInnoRaceGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
+	CurrentRaceEntries.Empty();
+	bFirstFinisherArrived = false;
 	AdvanceToPhase(EMatchPhase::LoadGate);
 }
 
 void AInnoRaceGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
+	CheckLoadGate();
+}
+
+void AInnoRaceGameMode::OnPlayerReportedLoaded(AInnoPlayerController* PC)
+{
+	if (PC)
+	{
+		if (AInnoPlayerState* PS = PC->GetPlayerState<AInnoPlayerState>())
+		{
+			PS->bHasLoadedMap = true;
+		}
+	}
 	CheckLoadGate();
 }
 
@@ -76,7 +92,6 @@ void AInnoRaceGameMode::Tick(float DeltaSeconds)
 	case EMatchPhase::Intermission:
 		if (PhaseTimer >= IntermissionSec)
 		{
-			// Seamless travel to next track or complete match
 			CompleteMatch();
 		}
 		break;
@@ -92,6 +107,7 @@ void AInnoRaceGameMode::AdvanceToPhase(EMatchPhase NewPhase)
 	if (AInnoRaceGameState* InnoGS = GetGameState<AInnoRaceGameState>())
 	{
 		InnoGS->MatchPhase = NewPhase;
+		InnoGS->OnRep_MatchPhase(); // Ensure listen-server host also fires local phase change delegates
 	}
 }
 
@@ -129,11 +145,11 @@ void AInnoRaceGameMode::CheckLoadGate()
 
 void AInnoRaceGameMode::StartCountdown()
 {
-	AdvanceToPhase(EMatchPhase::Countdown);
 	if (AInnoRaceGameState* InnoGS = GetGameState<AInnoRaceGameState>())
 	{
 		InnoGS->StartServerTime = GetWorld()->GetTimeSeconds() + CountdownSec;
 	}
+	AdvanceToPhase(EMatchPhase::Countdown);
 }
 
 void AInnoRaceGameMode::StartRacing()
@@ -181,12 +197,11 @@ void AInnoRaceGameMode::OnPlayerCrossedFinishLine(AInnoPlayerController* PC, int
 	if (!bFirstFinisherArrived)
 	{
 		bFirstFinisherArrived = true;
-		AdvanceToPhase(EMatchPhase::Finishing);
-
 		if (AInnoRaceGameState* InnoGS = GetGameState<AInnoRaceGameState>())
 		{
 			InnoGS->GraceDeadlineServerTime = GetWorld()->GetTimeSeconds() + GracePeriodSec;
 		}
+		AdvanceToPhase(EMatchPhase::Finishing);
 	}
 
 	// Check if all connected players have finished
@@ -261,14 +276,13 @@ void AInnoRaceGameMode::FinalizeRace()
 	RaceResult.Entries = CurrentRaceEntries;
 	CompletedRaceResults.Add(RaceResult);
 
-	// 2. Broadcast reliable race results to each connected client
+	// 2. Update series stats and broadcast reliable race results to each connected client
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
 		if (AInnoPlayerController* PC = Cast<AInnoPlayerController>(It->Get()))
 		{
 			PC->Client_ReceiveRaceResult(RaceResult);
 
-			// Find client's rank to fire individual placement banner
 			AInnoPlayerState* PS = PC->GetPlayerState<AInnoPlayerState>();
 			if (PS)
 			{
@@ -276,6 +290,12 @@ void AInnoRaceGameMode::FinalizeRace()
 				{
 					if (Entry.PlayerName.Equals(PS->ParticipantName))
 					{
+						PS->SeriesTotalTimeMs += Entry.TimeMs;
+						if (Entry.Rank == 1 && Entry.Status == EParticipantStatus::Finished)
+						{
+							PS->SeriesRaceWins++;
+						}
+
 						FString BannerText = (Entry.Rank == 1) ? TEXT("YOU WON!") : FString::Printf(TEXT("You finished %d!"), Entry.Rank);
 						if (Entry.Status == EParticipantStatus::DNF)
 						{
@@ -301,6 +321,15 @@ void AInnoRaceGameMode::CompleteMatch()
 	FinalSummary.MatchId = CurrentMatchId;
 	FinalSummary.Races = CompletedRaceResults;
 	FInnoScoring::ComputeStandings(CompletedRaceResults, FinalSummary.Standings);
+
+	// Persist match summary locally on host
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UInnoLocalStore* Store = GI->GetSubsystem<UInnoLocalStore>())
+		{
+			Store->RecordMatchSummary(FinalSummary);
+		}
+	}
 
 	// 2. Deliver final summary reliably to each client
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)

@@ -52,6 +52,30 @@ void AInnoLobbyGameMode::PreLogin(const FString& Options, const FString& Address
 	}
 }
 
+FString AInnoLobbyGameMode::InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal)
+{
+	FString ErrorMessage = Super::InitNewPlayer(NewPlayerController, UniqueId, Options, Portal);
+
+	if (NewPlayerController)
+	{
+		if (AInnoPlayerState* InnoPS = NewPlayerController->GetPlayerState<AInnoPlayerState>())
+		{
+			const FString ParsedName = UGameplayStatics::ParseOption(Options, TEXT("Name"));
+			if (!ParsedName.IsEmpty())
+			{
+				InnoPS->ParticipantName = ParsedName;
+			}
+			const FString ParsedCar = UGameplayStatics::ParseOption(Options, TEXT("Car"));
+			if (!ParsedCar.IsEmpty())
+			{
+				InnoPS->SelectedCarId = FName(*ParsedCar);
+			}
+		}
+	}
+
+	return ErrorMessage;
+}
+
 void AInnoLobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
@@ -63,7 +87,8 @@ void AInnoLobbyGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 
 	// Auto-suffix duplicate participant names inside the lobby (e.g. "Alex (2)")
-	FString CandidateName = NewPS->ParticipantName.IsEmpty() ? TEXT("Pilot") : NewPS->ParticipantName;
+	const FString BaseName = NewPS->ParticipantName.IsEmpty() ? TEXT("Pilot") : NewPS->ParticipantName;
+	FString CandidateName = BaseName;
 	int32 Suffix = 2;
 
 	bool bNameCollision = true;
@@ -80,7 +105,7 @@ void AInnoLobbyGameMode::PostLogin(APlayerController* NewPlayer)
 					if (OtherPS->ParticipantName.Equals(CandidateName, ESearchCase::IgnoreCase))
 					{
 						bNameCollision = true;
-						CandidateName = FString::Printf(TEXT("%s (%d)"), *NewPS->ParticipantName, Suffix);
+						CandidateName = FString::Printf(TEXT("%s (%d)"), *BaseName, Suffix);
 						Suffix++;
 						break;
 					}

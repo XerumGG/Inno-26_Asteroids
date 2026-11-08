@@ -16,7 +16,7 @@ void UHoverFuelComponent::InitializeFuel(float InCapacity, float InLowThreshold)
 {
 	MaxFuel = FMath::Max(1.0f, InCapacity);
 	CurrentFuel = MaxFuel;
-	LowFuelThreshold = InLowThreshold;
+	LowFuelThreshold = FMath::Clamp(InLowThreshold, 0.0f, MaxFuel);
 	bInLimpMode = false;
 	bAlertActive = false;
 
@@ -25,7 +25,7 @@ void UHoverFuelComponent::InitializeFuel(float InCapacity, float InLowThreshold)
 
 void UHoverFuelComponent::BurnFuel(float BurnRatePerSec, float DeltaTime)
 {
-	if (bInLimpMode || CurrentFuel <= 0.0f)
+	if (bInLimpMode || CurrentFuel <= 0.0f || BurnRatePerSec <= 0.0f)
 	{
 		return;
 	}
@@ -34,7 +34,7 @@ void UHoverFuelComponent::BurnFuel(float BurnRatePerSec, float DeltaTime)
 	OnFuelChanged.Broadcast(CurrentFuel, MaxFuel);
 
 	// Low Fuel Alert Check
-	if (CurrentFuel <= LowFuelThreshold && !bAlertActive && CurrentFuel > 0.0f)
+	if (CurrentFuel <= LowFuelThreshold && !bAlertActive)
 	{
 		bAlertActive = true;
 		OnLowFuelAlert.Broadcast(true);

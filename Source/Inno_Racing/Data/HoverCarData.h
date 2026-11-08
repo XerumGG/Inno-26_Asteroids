@@ -91,12 +91,28 @@ public:
 	float HoverHeightCm = 120.0f;
 
 	// Maximum raycast length downward in cm
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "50.0"))
-	float RayTraceLengthCm = 300.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "100.0"))
+	float RayTraceLengthCm = 500.0f;
 
 	// Time without track surface beneath before off-track respawn is triggered
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "0.5"))
 	float OffTrackRespawnSec = 1.5f;
+
+	// Vertical height correction gain (stiffness)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "1.0"))
+	float HoverStiffnessGain = 8.0f;
+
+	// Vertical velocity damping interpolation speed
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "1.0"))
+	float HoverDampingSpeed = 14.0f;
+
+	// Downward acceleration when airborne (cm/s^2)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "100.0"))
+	float AirborneGravityCms2 = 980.0f;
+
+	// Maximum downward fall speed when airborne (cm/s)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist", meta = (ClampMin = "200.0"))
+	float MaxFallSpeedCms = 1200.0f;
 
 	// Maximum visual mesh roll banking in degrees during turns
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HoverAssist|Visuals")

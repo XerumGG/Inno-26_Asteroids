@@ -21,11 +21,15 @@ class INNO_RACING_API UHoverBoostComponent : public UActorComponent
 public:
 	UHoverBoostComponent();
 
-	void InitializeBoost(float InDuration, float InAccelMult, float InTopSpeedMult, float InTurnMult);
+	void InitializeBoost(float InDuration, float InAccelMult, float InTopSpeedMult, float InTurnMult, int32 InMaxCharges = 3);
 
 	// Automatically triggers immediate rocket boost (called upon collecting a boost pickup)
 	UFUNCTION(BlueprintCallable, Category = "Hover|Boost")
 	void TriggerInstantBoost(float DurationOverride = -1.0f);
+
+	// Cancels any active boost (e.g. on off-track respawn)
+	UFUNCTION(BlueprintCallable, Category = "Hover|Boost")
+	void StopBoost();
 
 	// Ticks boost timer
 	void UpdateBoost(float DeltaTime);
@@ -55,6 +59,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hover|Boost")
 	bool bIsBoosting = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hover|Boost")
+	int32 MaxBoostCharges = 3;
 
 	float BoostAccelMultiplier = 2.0f;
 	float BoostTopSpeedMultiplier = 1.35f;

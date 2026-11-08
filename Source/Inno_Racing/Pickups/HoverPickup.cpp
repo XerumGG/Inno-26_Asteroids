@@ -5,6 +5,7 @@
 #include "GameFramework/RotatingMovementComponent.h"
 #include "Inno_Racing/Hover/HoverFuelComponent.h"
 #include "Inno_Racing/Hover/HoverBoostComponent.h"
+#include "Inno_Racing/Hover/HoverCarPawn.h"
 
 AHoverPickup::AHoverPickup()
 {
@@ -27,6 +28,7 @@ AHoverPickup::AHoverPickup()
 void AHoverPickup::BeginPlay()
 {
 	Super::BeginPlay();
+	PickupMesh->OnComponentBeginOverlap.RemoveDynamic(this, &AHoverPickup::OnOverlapBegin);
 	PickupMesh->OnComponentBeginOverlap.AddDynamic(this, &AHoverPickup::OnOverlapBegin);
 }
 
@@ -56,7 +58,18 @@ void AHoverPickup::OnOverlapBegin(
 	{
 		if (UHoverFuelComponent* FuelComp = Pawn->FindComponentByClass<UHoverFuelComponent>())
 		{
-			FuelComp->AddFuel(ValueAmount);
+			float AmountToGive = ValueAmount;
+			if (AmountToGive <= 0.0f)
+			{
+				if (const AHoverCarPawn* HoverPawn = Cast<AHoverCarPawn>(Pawn))
+				{
+					if (HoverPawn->CarData)
+					{
+						AmountToGive = HoverPawn->CarData->FuelPickupAmount;
+					}
+				}
+			}
+			FuelComp->AddFuel(AmountToGive > 0.0f ? AmountToGive : 20.0f);
 			bApplied = true;
 		}
 	}

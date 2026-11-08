@@ -2,6 +2,9 @@
 
 #include "Inno_Racing/Race/InnoPlayerController.h"
 #include "Inno_Racing/Race/InnoPlayerState.h"
+#include "Inno_Racing/Race/InnoLobbyGameMode.h"
+#include "Inno_Racing/Race/InnoRaceGameMode.h"
+#include "Engine/World.h"
 
 AInnoPlayerController::AInnoPlayerController()
 {
@@ -18,6 +21,9 @@ void AInnoPlayerController::BeginPlay()
 	{
 		FInputModeGameOnly InputMode;
 		SetInputMode(InputMode);
+
+		// Automatically notify server that map is loaded when entering a race level
+		Server_ReportLoaded();
 	}
 }
 
@@ -27,6 +33,14 @@ void AInnoPlayerController::Server_SetReady_Implementation(bool bReady)
 	{
 		InnoPS->bIsReady = bReady;
 	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (AInnoLobbyGameMode* LobbyGM = World->GetAuthGameMode<AInnoLobbyGameMode>())
+		{
+			LobbyGM->CheckAllPlayersReady();
+		}
+	}
 }
 
 void AInnoPlayerController::Server_ReportLoaded_Implementation()
@@ -34,6 +48,14 @@ void AInnoPlayerController::Server_ReportLoaded_Implementation()
 	if (AInnoPlayerState* InnoPS = GetPlayerState<AInnoPlayerState>())
 	{
 		InnoPS->bHasLoadedMap = true;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (AInnoRaceGameMode* RaceGM = World->GetAuthGameMode<AInnoRaceGameMode>())
+		{
+			RaceGM->OnPlayerReportedLoaded(this);
+		}
 	}
 }
 

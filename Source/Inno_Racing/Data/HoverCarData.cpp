@@ -63,8 +63,12 @@ UHoverCarData::UHoverCarData()
 	LateralGripDecayRate = 6.0f;
 
 	HoverHeightCm = 120.0f;
-	RayTraceLengthCm = 300.0f;
+	RayTraceLengthCm = 500.0f;
 	OffTrackRespawnSec = 1.5f;
+	HoverStiffnessGain = 8.0f;
+	HoverDampingSpeed = 14.0f;
+	AirborneGravityCms2 = 980.0f;
+	MaxFallSpeedCms = 1200.0f;
 	VisualRollTiltMaxDeg = 22.0f;
 	VisualPitchTiltMaxDeg = 8.0f;
 

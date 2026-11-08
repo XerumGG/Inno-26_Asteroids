@@ -8,17 +8,19 @@ UHoverBoostComponent::UHoverBoostComponent()
 	BoostDurationSec = 2.5f;
 	BoostTimerRemaining = 0.0f;
 	bIsBoosting = false;
+	MaxBoostCharges = 3;
 	BoostAccelMultiplier = 2.0f;
 	BoostTopSpeedMultiplier = 1.35f;
 	BoostTurnRateMultiplier = 0.85f;
 }
 
-void UHoverBoostComponent::InitializeBoost(float InDuration, float InAccelMult, float InTopSpeedMult, float InTurnMult)
+void UHoverBoostComponent::InitializeBoost(float InDuration, float InAccelMult, float InTopSpeedMult, float InTurnMult, int32 InMaxCharges)
 {
-	BoostDurationSec = InDuration;
-	BoostAccelMultiplier = InAccelMult;
-	BoostTopSpeedMultiplier = InTopSpeedMult;
-	BoostTurnRateMultiplier = InTurnMult;
+	BoostDurationSec = FMath::Max(0.1f, InDuration);
+	BoostAccelMultiplier = FMath::Max(1.0f, InAccelMult);
+	BoostTopSpeedMultiplier = FMath::Max(1.0f, InTopSpeedMult);
+	BoostTurnRateMultiplier = FMath::Clamp(InTurnMult, 0.1f, 2.0f);
+	MaxBoostCharges = FMath::Max(1, InMaxCharges);
 	BoostTimerRemaining = 0.0f;
 	bIsBoosting = false;
 }
@@ -34,6 +36,16 @@ void UHoverBoostComponent::TriggerInstantBoost(float DurationOverride)
 	{
 		bIsBoosting = true;
 		OnBoostActivated.Broadcast();
+	}
+}
+
+void UHoverBoostComponent::StopBoost()
+{
+	if (bIsBoosting)
+	{
+		bIsBoosting = false;
+		BoostTimerRemaining = 0.0f;
+		OnBoostEnded.Broadcast();
 	}
 }
 

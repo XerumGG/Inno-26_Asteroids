@@ -62,6 +62,18 @@ void UHoverClutchComponent::SetLimpMode(bool bInLimpMode)
 	}
 }
 
+void UHoverClutchComponent::SetClutchLevelDirect(int32 NewLevel)
+{
+	const int32 MaxLevel = FMath::Max(1, CachedBands.Num());
+	const int32 ClampedLevel = FMath::Clamp(NewLevel, 1, MaxLevel);
+	if (CurrentClutchLevel != ClampedLevel)
+	{
+		CurrentClutchLevel = ClampedLevel;
+		UpshiftDwellTimer = 0.0f;
+		OnClutchChanged.Broadcast(CurrentClutchLevel, GetCurrentBand().Name);
+	}
+}
+
 const FClutchBand& UHoverClutchComponent::GetCurrentBand() const
 {
 	if (CachedBands.IsValidIndex(CurrentClutchLevel - 1))
@@ -78,12 +90,13 @@ void UHoverClutchComponent::UpdateAutoShift(float CurrentForwardSpeedMs, bool bI
 		return;
 	}
 
-	// Limp mode locks the clutch to Band 1
-	if (bIsLimpMode)
+	// Limp mode locks the clutch to Band 1 unless actively boosting
+	if (bIsLimpMode && !bIsBoosting)
 	{
 		if (CurrentClutchLevel != 1)
 		{
 			CurrentClutchLevel = 1;
+			UpshiftDwellTimer = 0.0f;
 			OnClutchChanged.Broadcast(CurrentClutchLevel, GetCurrentBand().Name);
 		}
 		return;
@@ -102,7 +115,11 @@ void UHoverClutchComponent::UpdateAutoShift(float CurrentForwardSpeedMs, bool bI
 			// Instant upshift while boosting, otherwise respect dwell time
 			if (bIsBoosting)
 			{
-				CurrentClutchLevel++;
+				while (CurrentClutchLevel < MaxLevel &&
+					   CurrentForwardSpeedMs >= CachedBands[CurrentClutchLevel - 1].TopSpeedMs * UpshiftThresholdRatio)
+				{
+					CurrentClutchLevel++;
+				}
 				UpshiftDwellTimer = 0.0f;
 				OnClutchChanged.Broadcast(CurrentClutchLevel, GetCurrentBand().Name);
 				return;
@@ -130,15 +147,28 @@ void UHoverClutchComponent::UpdateAutoShift(float CurrentForwardSpeedMs, bool bI
 	}
 
 	// 2. Check for DOWNSHIFT
-	// Downshift when speed drops below 90% of the PREVIOUS band's top speed
-	if (CurrentClutchLevel > 1)
+	// Downshift when speed drops below DownshiftThresholdRatio (90%) of the PREVIOUS band's top speed
+	if (CurrentClutchLevel > 1 && !bIsBoosting)
 	{
-		const FClutchBand& PreviousBand = CachedBands[CurrentClutchLevel - 2];
-		const float DownshiftThresholdSpeed = PreviousBand.TopSpeedMs * DownshiftThresholdRatio;
-
-		if (CurrentForwardSpeedMs < DownshiftThresholdSpeed)
+		bool bDownshifted = false;
+		while (CurrentClutchLevel > 1)
 		{
-			CurrentClutchLevel--;
+			const FClutchBand& PreviousBand = CachedBands[CurrentClutchLevel - 2];
+			const float DownshiftThresholdSpeed = PreviousBand.TopSpeedMs * DownshiftThresholdRatio;
+
+			if (CurrentForwardSpeedMs < DownshiftThresholdSpeed)
+			{
+				CurrentClutchLevel--;
+				bDownshifted = true;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		if (bDownshifted)
+		{
 			UpshiftDwellTimer = 0.0f;
 			OnClutchChanged.Broadcast(CurrentClutchLevel, GetCurrentBand().Name);
 		}
