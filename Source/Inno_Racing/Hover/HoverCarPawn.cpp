@@ -12,11 +12,17 @@
 #include "Inno_Racing/Hover/HoverAssistComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
 
 AHoverCarPawn::AHoverCarPawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+
+	// Auto possess player 0 in PIE or standalone placement
+	AutoPossessPlayer = EAutoReceiveInput::Player0;
 
 	// 1. Root Collision Box with Gravity Off
 	CollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("CollisionBox"));
@@ -25,8 +31,13 @@ AHoverCarPawn::AHoverCarPawn()
 	CollisionBox->SetSimulatePhysics(true);
 	CollisionBox->SetEnableGravity(false); // Gravity is OFF!
 	CollisionBox->SetCollisionProfileName(TEXT("Vehicle"));
-	CollisionBox->SetLinearDamping(0.1f);
-	CollisionBox->SetAngularDamping(2.0f);
+	CollisionBox->SetLinearDamping(0.5f);
+	CollisionBox->SetAngularDamping(10.0f);
+
+	// Lock rotation in physics constraints so physical hits never spin or flip the car
+	CollisionBox->BodyInstance.bLockXRotation = true;
+	CollisionBox->BodyInstance.bLockYRotation = true;
+	CollisionBox->BodyInstance.bLockZRotation = true;
 
 	// 2. Visual Mesh Root (tilted for roll/pitch bank while Collision stays level)
 	VisualRoot = CreateDefaultSubobject<USceneComponent>(TEXT("VisualRoot"));
@@ -107,6 +118,12 @@ void AHoverCarPawn::BeginPlay()
 	HoverNozzles.Add(HoverNozzle_RL);
 	HoverNozzles.Add(HoverNozzle_RR);
 
+	// Fallback CarData default if unassigned in Blueprint
+	if (!CarData)
+	{
+		CarData = NewObject<UHoverCarData>(this, TEXT("DefaultCarDataFallback"));
+	}
+
 	if (CarData)
 	{
 		ClutchComp->InitializeClutch(CarData);
@@ -128,6 +145,22 @@ void AHoverCarPawn::BeginPlay()
 
 	FuelComp->OnLimpModeToggled.AddDynamic(this, &AHoverCarPawn::HandleLimpModeToggled);
 	AssistComp->OnOffTrackDetected.AddDynamic(this, &AHoverCarPawn::HandleOffTrack);
+
+	// Zero out any initial angular velocity
+	if (CollisionBox)
+	{
+		CollisionBox->SetPhysicsAngularVelocityInRadians(FVector::ZeroVector);
+	}
+
+	// Auto-engage clutch and hover takeoff for instant drivability
+	if (ClutchComp)
+	{
+		ClutchComp->EngageClutch();
+	}
+	if (AssistComp)
+	{
+		AssistComp->StartTakeoff();
+	}
 }
 
 void AHoverCarPawn::Tick(float DeltaTime)
@@ -294,9 +327,74 @@ void AHoverCarPawn::Input_Steer(float AxisValue)
 	SteerInput = FMath::Clamp(AxisValue, -1.0f, 1.0f);
 }
 
+void AHoverCarPawn::PawnClientRestart()
+{
+	Super::PawnClientRestart();
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+		{
+			if (DefaultMappingContext)
+			{
+				Subsystem->AddMappingContext(DefaultMappingContext, 0);
+			}
+		}
+	}
+}
+
 void AHoverCarPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		if (ActionAccelerate)
+		{
+			EnhancedInputComponent->BindAction(ActionAccelerate, ETriggerEvent::Triggered, this, &AHoverCarPawn::HandleEnhancedAccelerate);
+			EnhancedInputComponent->BindAction(ActionAccelerate, ETriggerEvent::Completed, this, &AHoverCarPawn::HandleEnhancedAccelerateCompleted);
+		}
+		if (ActionBrake)
+		{
+			EnhancedInputComponent->BindAction(ActionBrake, ETriggerEvent::Triggered, this, &AHoverCarPawn::HandleEnhancedBrake);
+			EnhancedInputComponent->BindAction(ActionBrake, ETriggerEvent::Completed, this, &AHoverCarPawn::HandleEnhancedBrakeCompleted);
+		}
+		if (ActionSteer)
+		{
+			EnhancedInputComponent->BindAction(ActionSteer, ETriggerEvent::Triggered, this, &AHoverCarPawn::HandleEnhancedSteer);
+			EnhancedInputComponent->BindAction(ActionSteer, ETriggerEvent::Completed, this, &AHoverCarPawn::HandleEnhancedSteerCompleted);
+		}
+	}
+}
+
+void AHoverCarPawn::HandleEnhancedAccelerate(const FInputActionValue& Value)
+{
+	Input_Accelerate(Value.Get<float>());
+}
+
+void AHoverCarPawn::HandleEnhancedAccelerateCompleted(const FInputActionValue& Value)
+{
+	Input_Accelerate(0.0f);
+}
+
+void AHoverCarPawn::HandleEnhancedBrake(const FInputActionValue& Value)
+{
+	Input_Brake(Value.Get<float>());
+}
+
+void AHoverCarPawn::HandleEnhancedBrakeCompleted(const FInputActionValue& Value)
+{
+	Input_Brake(0.0f);
+}
+
+void AHoverCarPawn::HandleEnhancedSteer(const FInputActionValue& Value)
+{
+	Input_Steer(Value.Get<float>());
+}
+
+void AHoverCarPawn::HandleEnhancedSteerCompleted(const FInputActionValue& Value)
+{
+	Input_Steer(0.0f);
 }
 
 void AHoverCarPawn::Server_SendMovementSample_Implementation(const FInnoMovementSample& Sample)

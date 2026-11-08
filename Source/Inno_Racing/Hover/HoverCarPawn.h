@@ -16,6 +16,9 @@ class UHoverClutchComponent;
 class UHoverFuelComponent;
 class UHoverBoostComponent;
 class UHoverAssistComponent;
+class UInputMappingContext;
+class UInputAction;
+struct FInputActionValue;
 
 // Movement sample sent by client to host
 USTRUCT(BlueprintType)
@@ -62,6 +65,7 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void PawnClientRestart() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// --- Root Physics Collision (Level) & Child Visual Mesh (Tilted) ---
@@ -116,6 +120,19 @@ public:
 	// --- Data Asset Configuration ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HoverCar|Config")
 	TObjectPtr<UHoverCarData> CarData;
+
+	// --- Enhanced Input Bindings (Auto-bound in C++ or via Blueprint) ---
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HoverCar|Input")
+	TObjectPtr<UInputMappingContext> DefaultMappingContext;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HoverCar|Input")
+	TObjectPtr<UInputAction> ActionAccelerate;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HoverCar|Input")
+	TObjectPtr<UInputAction> ActionBrake;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HoverCar|Input")
+	TObjectPtr<UInputAction> ActionSteer;
 
 	// --- Input Actions (Only 3 controls: Accelerate, Brake, Steer) ---
 	UFUNCTION(BlueprintCallable, Category = "HoverCar|Input")
@@ -173,6 +190,14 @@ protected:
 
 	UFUNCTION()
 	void HandleOffTrack();
+
+	// Enhanced Input Callback Handlers
+	void HandleEnhancedAccelerate(const FInputActionValue& Value);
+	void HandleEnhancedAccelerateCompleted(const FInputActionValue& Value);
+	void HandleEnhancedBrake(const FInputActionValue& Value);
+	void HandleEnhancedBrakeCompleted(const FInputActionValue& Value);
+	void HandleEnhancedSteer(const FInputActionValue& Value);
+	void HandleEnhancedSteerCompleted(const FInputActionValue& Value);
 
 	// Current Inputs
 	float AccelInput = 0.0f;

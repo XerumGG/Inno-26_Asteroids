@@ -5,9 +5,20 @@
 
 AInnoPlayerController::AInnoPlayerController()
 {
-	bShowMouseCursor = true;
-	bEnableClickEvents = true;
-	bEnableMouseOverEvents = true;
+	bShowMouseCursor = false;
+	bEnableClickEvents = false;
+	bEnableMouseOverEvents = false;
+}
+
+void AInnoPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (IsLocalController())
+	{
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+	}
 }
 
 void AInnoPlayerController::Server_SetReady_Implementation(bool bReady)

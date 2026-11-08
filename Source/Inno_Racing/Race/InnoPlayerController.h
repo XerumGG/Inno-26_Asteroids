@@ -23,6 +23,8 @@ class INNO_RACING_API AInnoPlayerController : public APlayerController
 public:
 	AInnoPlayerController();
 
+	virtual void BeginPlay() override;
+
 	// --- Server RPCs ---
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Inno|Net")
 	void Server_SetReady(bool bReady);
