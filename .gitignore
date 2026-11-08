@@ -1,0 +1,25 @@
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+.vsconfig
+
+# Unreal Engine Build & Temporary Folders
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Assets & Content (pushed/shared separately, code-only repository)
+Content/
+
+# Crash dumps & logs
+*.log
+*.dmp
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
